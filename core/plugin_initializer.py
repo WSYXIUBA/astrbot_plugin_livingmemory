@@ -364,12 +364,60 @@ class PluginInitializer:
             details = (result.stderr or result.stdout or "").strip()
             if result.returncode < 0:
                 details = f"进程被信号 {-result.returncode} 终止。{details}".strip()
-            raise InitializationError(
-                "FAISS 初始化失败，当前 CPU 或运行环境可能不兼容 faiss-cpu。"
-                "无 AVX2 的 CPU 上可能触发 Illegal instruction；"
-                "请使用支持 AVX2 的 CPU、安装兼容版本 FAISS，或更换运行环境。"
-                f"{' 原始错误: ' + details if details else ''}"
+            # 如果 faiss 崩溃（SIGILL 等），尝试安装 bundled generic whl
+            if not self._try_install_bundled_faiss():
+                raise InitializationError(
+                    "FAISS 初始化失败，当前 CPU 或运行环境可能不兼容 faiss-cpu。"
+                    "无 AVX2 的 CPU 上可能触发 Illegal instruction；"
+                    "请使用支持 AVX2 的 CPU、安装兼容版本 FAISS，或更换运行环境。"
+                    f"{' 原始错误: ' + details if details else ''}"
+                )
+
+    def _find_bundled_whl(self) -> Path | None:
+        plugin_dir = Path(__file__).resolve().parent.parent
+        for name in os.listdir(plugin_dir):
+            if name.startswith("faiss_cpu-") and name.endswith(".whl"):
+                return plugin_dir / name
+        return None
+
+    def _try_install_bundled_faiss(self) -> bool:
+        whl_path = self._find_bundled_whl()
+        if whl_path is None:
+            return False
+        logger.info(
+            f"检测到 faiss 不兼容，正在安装 bundled generic wheel: "
+            f"{whl_path.name}"
+        )
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", str(whl_path),
+                 "--force-reinstall", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
             )
+            if result.returncode != 0:
+                logger.error(f"安装 bundled whl 失败: {result.stderr}")
+                return False
+            logger.info("Bundled faiss-cpu generic wheel 安装成功，重新验证...")
+            env = os.environ.copy()
+            env.setdefault("FAISS_OPT_LEVEL", "generic")
+            verify = subprocess.run(
+                [sys.executable, "-c", "import faiss"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                env=env,
+            )
+            if verify.returncode != 0:
+                logger.error(f"安装后验证仍失败: {verify.stderr or verify.stdout}")
+                return False
+            return True
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            logger.error(f"安装 bundled whl 时出错: {exc}")
+            return False
 
     def _load_faiss_vec_db_class(self):
         global FaissVecDB
