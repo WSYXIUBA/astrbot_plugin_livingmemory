@@ -1,4 +1,4 @@
-name: Build faiss-cpu (generic / no AVX2)
+name: Build faiss-cpu (generic, manylinux self-contained)
 
 on:
   workflow_dispatch:
@@ -6,9 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
     steps:
       - name: Checkout faiss-wheels
         uses: actions/checkout@v4
@@ -16,27 +13,21 @@ jobs:
           repository: kyamagu/faiss-wheels
           submodules: recursive
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install system build dependencies
+      - name: Build wheel inside manylinux container
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libopenblas-dev
-
-      - name: Install Python build tools
-        run: pip install build
-
-      - name: Build faiss-cpu wheel (generic only)
-        env:
-          FAISS_OPT_LEVELS: generic
-          FAISS_GPU_SUPPORT: "OFF"
-        run: python -m build --wheel -o dist/
+          docker run --rm \
+            -v $(pwd):/work -w /work \
+            -e FAISS_OPT_LEVELS=generic \
+            -e FAISS_GPU_SUPPORT=OFF \
+            quay.io/pypa/manylinux_2_28_x86_64 \
+            bash -c "
+              yum install -y openblas-devel patchelf &&
+              /opt/python/cp312-cp312/bin/pip install build &&
+              /opt/python/cp312-cp312/bin/python -m build --wheel -o dist/
+            "
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: faiss-cpu-generic-py${{ matrix.python-version }}-linux-x86_64
+          name: faiss-cpu-generic-py3.12-manylinux-x86_64
           path: dist/*.whl
