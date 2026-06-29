@@ -391,10 +391,10 @@ class PluginInitializer:
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", str(whl_path),
-                 "--force-reinstall", "-q"],
+                 "--force-reinstall", "--no-deps", "-q"],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=300,
                 check=False,
             )
             if result.returncode != 0:
