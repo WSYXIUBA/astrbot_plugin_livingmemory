@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("FAISS_OPT_LEVEL", "generic")
+
 """
 main.py - LivingMemory 插件主文件
 负责插件注册、初始化和生命周期管理

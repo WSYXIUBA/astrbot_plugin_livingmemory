@@ -344,12 +344,15 @@ class PluginInitializer:
 
     def _check_faiss_runtime(self) -> None:
         try:
+            env = os.environ.copy()
+            env.setdefault("FAISS_OPT_LEVEL", "generic")
             result = subprocess.run(
                 [sys.executable, "-c", "import faiss"],
                 capture_output=True,
                 text=True,
                 timeout=10,
                 check=False,
+                env=env,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise InitializationError(
