@@ -1,4 +1,4 @@
-name: Build faiss-cpu (generic / no AVX2)
+name: Build faiss-cpu (generic / no AVX2, static OpenBLAS)
 
 on:
   workflow_dispatch:
@@ -29,11 +29,14 @@ jobs:
       - name: Install Python build tools
         run: pip install build
 
-      - name: Build faiss-cpu wheel (generic only)
+      - name: Build faiss-cpu wheel (generic, static OpenBLAS)
         env:
           FAISS_OPT_LEVELS: generic
           FAISS_GPU_SUPPORT: "OFF"
-        run: python -m build --wheel -o dist/
+        run: |
+          python -m build --wheel -o dist/ \
+            -Ccmake.define.BLA_STATIC=ON \
+            -Ccmake.define.BLA_VENDOR=OpenBLAS
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
