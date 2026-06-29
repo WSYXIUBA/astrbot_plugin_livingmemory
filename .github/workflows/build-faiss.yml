@@ -13,7 +13,7 @@ jobs:
           repository: kyamagu/faiss-wheels
           submodules: recursive
 
-      - name: Build wheel inside manylinux container
+      - name: Build and repair wheel inside manylinux container
         run: |
           docker run --rm \
             -v $(pwd):/work -w /work \
@@ -21,13 +21,14 @@ jobs:
             -e FAISS_GPU_SUPPORT=OFF \
             quay.io/pypa/manylinux_2_28_x86_64 \
             bash -c "
-              yum install -y openblas-devel patchelf &&
-              /opt/python/cp312-cp312/bin/pip install build &&
-              /opt/python/cp312-cp312/bin/python -m build --wheel -o dist/
+              yum install -y openblas-devel &&
+              /opt/python/cp312-cp312/bin/pip install build auditwheel &&
+              /opt/python/cp312-cp312/bin/python -m build --wheel -o dist/ &&
+              /opt/python/cp312-cp312/bin/auditwheel repair dist/*.whl -w dist_repaired/ --plat manylinux_2_28_x86_64
             "
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
           name: faiss-cpu-generic-py3.12-manylinux-x86_64
-          path: dist/*.whl
+          path: dist_repaired/*.whl
