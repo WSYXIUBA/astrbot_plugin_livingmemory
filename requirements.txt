@@ -1,3 +1,4 @@
+./faiss_cpu-1.13.2-cp310-abi3-linux_x86_64.whl
 networkx>=3.0
 jieba>=0.42.1
 pytz>=2021.3
