@@ -1,4 +1,4 @@
-name: Build faiss-cpu (generic / no AVX2, self-contained)
+name: Build faiss-cpu (generic / no AVX2)
 
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
           sudo apt-get install -y -qq libopenblas-dev
 
       - name: Install Python build tools
-        run: pip install build auditwheel
+        run: pip install build
 
       - name: Build faiss-cpu wheel (generic only)
         env:
@@ -35,12 +35,8 @@ jobs:
           FAISS_GPU_SUPPORT: "OFF"
         run: python -m build --wheel -o dist/
 
-      - name: Repair wheel (bundle system libs)
-        run: |
-          auditwheel repair dist/*.whl -w dist_repaired/ --plat manylinux_2_17_x86_64
-
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
           name: faiss-cpu-generic-py${{ matrix.python-version }}-linux-x86_64
-          path: dist_repaired/*.whl
+          path: dist/*.whl

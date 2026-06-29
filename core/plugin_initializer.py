@@ -380,6 +380,33 @@ class PluginInitializer:
                 return plugin_dir / name
         return None
 
+    def _faiss_import_ok(self) -> bool:
+        """在子进程中测试 faiss 是否能正常导入。"""
+        env = os.environ.copy()
+        env.setdefault("FAISS_OPT_LEVEL", "generic")
+        result = subprocess.run(
+            [sys.executable, "-c", "import faiss"],
+            capture_output=True, text=True, timeout=10, check=False, env=env,
+        )
+        return result.returncode == 0
+
+    def _install_system_runtime_deps(self) -> bool:
+        """安装 faiss 运行时所需的系统库（libopenblas, libgfortran）。"""
+        logger.info("正在安装系统运行时依赖 (libopenblas0 libgfortran5)...")
+        try:
+            result = subprocess.run(
+                ["apt-get", "install", "-y", "-qq",
+                 "libopenblas0", "libgfortran5"],
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            if result.returncode != 0:
+                logger.error(f"安装系统依赖失败: {result.stderr}")
+                return False
+            return True
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            logger.error(f"安装系统依赖时出错: {exc}")
+            return False
+
     def _try_install_bundled_faiss(self) -> bool:
         whl_path = self._find_bundled_whl()
         if whl_path is None:
@@ -389,32 +416,29 @@ class PluginInitializer:
             f"{whl_path.name}"
         )
         try:
+            # 1. 安装 bundled whl
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", str(whl_path),
                  "--force-reinstall", "--no-deps", "-q"],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                check=False,
+                capture_output=True, text=True, timeout=300, check=False,
             )
             if result.returncode != 0:
                 logger.error(f"安装 bundled whl 失败: {result.stderr}")
                 return False
             logger.info("Bundled faiss-cpu generic wheel 安装成功，重新验证...")
-            env = os.environ.copy()
-            env.setdefault("FAISS_OPT_LEVEL", "generic")
-            verify = subprocess.run(
-                [sys.executable, "-c", "import faiss"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-                env=env,
-            )
-            if verify.returncode != 0:
-                logger.error(f"安装后验证仍失败: {verify.stderr or verify.stdout}")
-                return False
-            return True
+
+            # 2. 验证导入
+            if self._faiss_import_ok():
+                return True
+
+            # 3. 如果还失败，尝试安装系统运行时库
+            if self._install_system_runtime_deps():
+                if self._faiss_import_ok():
+                    logger.info("安装系统依赖后 faiss 导入成功")
+                    return True
+
+            logger.error("所有修复尝试均失败，faiss 仍无法导入")
+            return False
         except (OSError, subprocess.TimeoutExpired) as exc:
             logger.error(f"安装 bundled whl 时出错: {exc}")
             return False
