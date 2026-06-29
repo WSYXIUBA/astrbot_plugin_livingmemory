@@ -392,17 +392,28 @@ class PluginInitializer:
 
     def _install_system_runtime_deps(self) -> bool:
         """安装 faiss 运行时所需的系统库（libopenblas, libgfortran）。"""
-        logger.info("正在安装系统运行时依赖 (libopenblas0 libgfortran5)...")
+        logger.info("正在安装系统运行时依赖...")
         try:
-            result = subprocess.run(
-                ["apt-get", "install", "-y", "-qq",
-                 "libopenblas0", "libgfortran5"],
-                capture_output=True, text=True, timeout=120, check=False,
+            # 先 update 包列表
+            subprocess.run(
+                ["apt-get", "update", "-qq"],
+                capture_output=True, text=True, timeout=60, check=False,
             )
-            if result.returncode != 0:
-                logger.error(f"安装系统依赖失败: {result.stderr}")
-                return False
-            return True
+            # 尝试常见包名组合
+            for pkgs in (
+                ["libopenblas0", "libgfortran5"],
+                ["libopenblas-dev", "libgfortran5"],
+                ["libopenblas0d", "libgfortran5"],
+            ):
+                result = subprocess.run(
+                    ["apt-get", "install", "-y", "-qq"] + pkgs,
+                    capture_output=True, text=True, timeout=120, check=False,
+                )
+                if result.returncode == 0:
+                    logger.info(f"系统依赖安装成功: {pkgs}")
+                    return True
+            logger.error("所有包名组合均失败")
+            return False
         except (OSError, subprocess.TimeoutExpired) as exc:
             logger.error(f"安装系统依赖时出错: {exc}")
             return False
