@@ -21,11 +21,19 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Build faiss-cpu wheel (generic only)
+      - name: Install system build dependencies
         run: |
-          FAISS_ENABLE_GPU=OFF \
-          FAISS_OPT_LEVELS=generic \
-          pip wheel . -w dist/ --no-build-isolation --no-deps
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libopenblas-dev
+
+      - name: Install Python build tools
+        run: pip install build
+
+      - name: Build faiss-cpu wheel (generic only)
+        env:
+          FAISS_OPT_LEVELS: generic
+          FAISS_GPU_SUPPORT: "OFF"
+        run: python -m build --wheel -o dist/
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
